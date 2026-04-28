@@ -63,7 +63,7 @@ void AudioPlayer::play(const int16_t *audioData, int audio_len, float speed)
         {
             break;
         }
-        else
+        else    //err > 0,代表成功写入的帧数
         {
             break;
         }
@@ -71,7 +71,7 @@ void AudioPlayer::play(const int16_t *audioData, int audio_len, float speed)
 
     if (snd_pcm_state(pcm_handle_) == SND_PCM_STATE_RUNNING)
     {
-        snd_pcm_drain(pcm_handle_);
+        snd_pcm_drain(pcm_handle_); //阻塞等待播放完成
     }
 }
 

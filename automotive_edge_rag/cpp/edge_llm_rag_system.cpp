@@ -9,10 +9,71 @@
 #include <regex>
 #include <cwchar>
 #include <cstdlib>
-#include <codecvt>
+// Deleted:#include <codecvt>
+#include <iconv.h>  // ✅ 替换为 iconv
+#include <vector>
+#include <cstring>
 
 namespace edge_llm_rag
 {
+    // ✅ 新增：UTF-8 ↔ UTF-32 转换工具函数
+    namespace utf8_utils {
+        std::wstring utf8_to_utf32(const std::string& utf8_str) {
+            if (utf8_str.empty()) return L"";
+            
+            iconv_t cd = iconv_open("UTF-32LE", "UTF-8");
+            if (cd == (iconv_t)-1) {
+                std::cerr << "[ERROR] iconv_open failed: " << strerror(errno) << std::endl;
+                return L"";
+            }
+            
+            size_t in_bytes = utf8_str.size();
+            size_t out_bytes = in_bytes * 4;  // UTF-32 最多 4 倍扩展
+            std::vector<char> out_buf(out_bytes);
+            
+            char* in_ptr = const_cast<char*>(utf8_str.data());
+            char* out_ptr = out_buf.data();
+            
+            size_t result = iconv(cd, &in_ptr, &in_bytes, &out_ptr, &out_bytes);
+            iconv_close(cd);
+            
+            if (result == (size_t)-1) {
+                std::cerr << "[ERROR] iconv conversion failed: " << strerror(errno) << std::endl;
+                return L"";
+            }
+            
+            size_t wchar_count = (out_buf.size() - out_bytes) / sizeof(wchar_t);
+            return std::wstring(reinterpret_cast<wchar_t*>(out_buf.data()), wchar_count);
+        }
+        
+        std::string utf32_to_utf8(const std::wstring& utf32_str) {
+            if (utf32_str.empty()) return "";
+            
+            iconv_t cd = iconv_open("UTF-8", "UTF-32LE");
+            if (cd == (iconv_t)-1) {
+                std::cerr << "[ERROR] iconv_open failed: " << strerror(errno) << std::endl;
+                return "";
+            }
+            
+            size_t in_bytes = utf32_str.size() * sizeof(wchar_t);
+            size_t out_bytes = in_bytes * 4;  // UTF-8 最多 4 倍扩展
+            std::vector<char> out_buf(out_bytes);
+            
+            char* in_ptr = const_cast<char*>(reinterpret_cast<const char*>(utf32_str.data()));
+            char* out_ptr = out_buf.data();
+            
+            size_t result = iconv(cd, &in_ptr, &in_bytes, &out_ptr, &out_bytes);
+            iconv_close(cd);
+            
+            if (result == (size_t)-1) {
+                std::cerr << "[ERROR] iconv conversion failed: " << strerror(errno) << std::endl;
+                return "";
+            }
+            
+            return std::string(out_buf.data(), out_buf.size() - out_bytes);
+        }
+    }
+
     EdgeLLMRAGSystem::EdgeLLMRAGSystem()
         :  is_initialized_(false)
     {
@@ -141,9 +202,16 @@ namespace edge_llm_rag
             L"([。！？；：\n]|\\?\\s|\\!\\s|\\；|\\，|\\、|\\|)");
         const std::wstring END_MARKER = L"END";
 
-        std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-
-        std::wstring wide_text = converter.from_bytes(rag_text) + END_MARKER;
+        // ✅ 修复：使用 iconv 替代 codecvt
+        std::wstring wide_text = utf8_utils::utf8_to_utf32(rag_text) + END_MARKER;
+        
+        // 🔍 Debug: 验证转换正确性
+        std::cout << "[DEBUG] Wide text length: " << wide_text.length() << std::endl;
+        std::cout << "[DEBUG] First 10 wide chars (hex): ";
+        for (size_t i = 0; i < std::min(wide_text.length(), (size_t)10); ++i) {
+            std::cout << std::hex << (uint32_t)wide_text[i] << " ";
+        }
+        std::cout << std::dec << std::endl;
 
         std::wsregex_iterator it(wide_text.begin(), wide_text.end(), wide_delimiter);
         std::wsregex_iterator end;
@@ -157,6 +225,7 @@ namespace edge_llm_rag
             ++skip_counter;
         }
 
+        int segment_count = 0;
         while (it != end)
         {
             size_t seg_start = last_pos;
@@ -170,10 +239,16 @@ namespace edge_llm_rag
 
             if (!wide_segment.empty())
             {
-                // 转换回UTF-8
-                auto response1 = tts_client_.request(converter.to_bytes(wide_segment));
+                // ✅ 修复：使用 iconv 转回 UTF-8
+                std::string utf8_segment = utf8_utils::utf32_to_utf8(wide_segment);
+                
+                // 🔍 Debug: 打印分段
+                std::cout << "[DEBUG] Segment #" << ++segment_count 
+                          << " (len=" << utf8_segment.length() << "): " 
+                          << utf8_segment << std::endl;
+                
+                auto response1 = tts_client_.request(utf8_segment);
                 std::cout << "[tts -> RAG] received: " << response1 << std::endl;
-                // queue.push_text(converter.to_bytes(wide_segment));
             }
             ++it;
         }
@@ -184,9 +259,12 @@ namespace edge_llm_rag
             std::wstring last_segment = wide_text.substr(last_pos);
             if (!last_segment.empty())
             {
-                auto response1 = tts_client_.request(converter.to_bytes(last_segment));
+                std::string utf8_last = utf8_utils::utf32_to_utf8(last_segment);
+                std::cout << "[DEBUG] Last segment (len=" << utf8_last.length() 
+                          << "): " << utf8_last << std::endl;
+                
+                auto response1 = tts_client_.request(utf8_last);
                 std::cout << "[tts -> RAG] received: " << response1 << std::endl;
-                // queue.push_text(converter.to_bytes(last_segment));
             }
         }
     }

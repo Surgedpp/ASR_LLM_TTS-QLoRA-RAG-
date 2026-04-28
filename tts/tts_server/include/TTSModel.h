@@ -26,7 +26,7 @@ public:
 private:
     float* dataW_ = nullptr;
     int32_t modelSize_ = 0;
-    std::unique_ptr<SynthesizerTrn> synthesizer_;
+    std::unique_ptr<SynthesizerTrn> synthesizer_;//TTS推理引擎包装器
 };
 
 #endif // TTS_MODEL_H

@@ -74,6 +74,7 @@ target_link_libraries(automotive_edge_rag_demo
     pybind11::module
     /usr/local/lib/libzmq_component.so  
     zmq
+    iconv  # ✅ 新增：链接 iconv 库
 
 )
 

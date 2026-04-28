@@ -26,7 +26,7 @@ bool TTSModel::load_model(const std::string &model_path)
     {
         return false;
     }
-    synthesizer_ = std::make_unique<SynthesizerTrn>(dataW_, modelSize_);
+    synthesizer_ = std::make_unique<SynthesizerTrn>(dataW_, modelSize_); //智能指针unique对象
     return true;
 }
 
@@ -34,6 +34,7 @@ int16_t *TTSModel::infer(const std::string &text, int32_t &audio_len)
 {
     if (!synthesizer_)
         return nullptr;
+    //infer(输入文本，说话人ID，语速缩放因子，输出的音频长度)
     return synthesizer_->infer(text, 0, 1.0, audio_len);
 }
 

@@ -6,34 +6,41 @@ import json
 import pickle
 import numpy as np
 from typing import List, Dict, Any, Tuple
-from sentence_transformers import SentenceTransformer
+#from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import logging
-
+from text2vec import SentenceModel, cos_sim
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class VehicleDataProcessor:
     
-    def __init__(self, model_name):
+   def __init__(self, model_name='shibing624/text2vec-base-chinese'):
         self.model_name = model_name
-        self.model = None
+        self.model = None  # 先不加载，等 load_model 统一加载
+        
         self.embeddings = None
         self.texts = []
         self.metadata = []
         
         os.makedirs("vector_db", exist_ok=True)
         os.makedirs("processed_data", exist_ok=True)
-        
+
     def load_model(self):
+        """
+        专门加载 text2vec 中文句向量模型（适合座舱指令）
+        """
         try:
-            logger.info(f"正在加载模型: {self.model_name}")
-            self.model = SentenceTransformer(self.model_name)
-            logger.info("模型加载成功")
+            logger.info(f"正在加载句向量模型: {self.model_name}")
+            
+            # ✅ 正确用法：text2vec 的 SentenceModel
+            self.model = SentenceModel(self.model_name)
+            
+            logger.info("句向量模型加载成功 ✅")
+        
         except Exception as e:
-            logger.error(f"模型加载失败: {e}")
+            logger.error(f"模型加载失败: {str(e)}")
             raise
-    
     def load_vehicle_data(self, file_path: str) -> List[Dict[str, Any]]:
         logger.info(f"正在加载数据文件: {file_path}")
         
